@@ -34,8 +34,8 @@ async function run() {
 			const email = req.query.email;
 			const query = { email };
 			const singleUser = await userCollection.findOne(query);
-			res.send(singleUser)
-		})
+			res.send(singleUser);
+		});
 
 		// all user for update field
 		app.get("/workstation", async (req, res) => {
@@ -49,14 +49,14 @@ async function run() {
 				wordStationQuery
 			);
 
-			
 			res.send(workStationResult);
 		});
 
-		// add new user to db 
+		// add new user to db
 		const addUserToDB = async (req, res, next) => {
 			const body = req.body;
 			const email = body?.emali;
+			const name = body?.name;
 			const servicId = body?.servicId;
 			const workStationName = body?.workStationName;
 			const stationKey = body?.stationKey;
@@ -67,20 +67,18 @@ async function run() {
 
 			if (!findUser) {
 				const userInfo = {
+					name,
 					email,
 					servicId,
 					workStationName,
 					stationKey,
 				};
 				// add to new user
-				const insertUser = await userCollection.insertOne(userInfo);	
-			} 
-
-			
+				const insertUser = await userCollection.insertOne(userInfo);
+			}
 
 			next();
 		};
-
 
 		// add user and add to workstaion
 		app.post("/add-user", addUserToDB, async (req, res) => {
@@ -92,14 +90,14 @@ async function run() {
 			const stationKey = body?.stationKey;
 
 			// add to workstaion
-		
-			const workStationQuery = {stationKey}
+
+			const workStationQuery = { stationKey };
 			const workStaionResult = await workStationCollection.findOne(
 				workStationQuery
 			);
 
 			if (!workStaionResult) {
-				// new workstation info 
+				// new workstation info
 				const newWorkStation = {
 					workStationName,
 					stationKey,
@@ -129,7 +127,7 @@ async function run() {
 					entry: [],
 					release: [],
 				};
-				workStaionResult.operator.push(addNewOperator)
+				workStaionResult.operator.push(addNewOperator);
 				const updateWorkStationOperator =
 					await workStationCollection.updateOne(
 						{
@@ -137,11 +135,9 @@ async function run() {
 						},
 						{ $set: { operator: workStaionResult.operator } }
 					);
-
-				
 			}
 
-			res.send({  });
+			res.send({});
 		});
 
 		// update entry and value
@@ -157,7 +153,6 @@ async function run() {
 				stationName,
 			} = body;
 
-			
 			const bulkOps = newData.map(({ email, entry, release }) => ({
 				updateOne: {
 					filter: {
@@ -230,9 +225,8 @@ async function run() {
 			res.send({});
 		});
 
-
-		// get user yeasterday data
-		app.get('/user-summary', async (req, res) => { 
+		// get user info
+		app.get("/user-summary", async (req, res) => {
 			const email = req.query.email;
 			// const query = { "operator.email" : email };
 
@@ -252,10 +246,40 @@ async function run() {
 					},
 				])
 				.toArray();
-			
-			
+
 			res.send(userData);
+		});
+
+		// transfer operator
+		app.put('/transfer-operator', async (req, res) => {
+			const body = req.body;
+			const stationKey = body.newStaionKey;
+			const workStationName = body.newStaionName;
+			const email = body.email;
+			const servicId = body.operatorId;
+
+			const isStationExist = await userCollection.findOne({ stationKey });
+			
+			if (!isStationExist) {
+				const userInfo = {
+					
+					email,
+					servicId,
+					workStationName,
+					stationKey,
+				};
+				// add to new user
+				const insertUser = await userCollection.insertOne(userInfo);
+
+				console.log(insertUser)
+			}
+
+
+
+
+			res.send({})
 		})
+
 		// Send a ping to confirm a successful connection
 		await client.db("admin").command({ ping: 1 });
 		console.log(
