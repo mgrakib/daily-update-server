@@ -1,0 +1,29 @@
+{
+	"users": [
+		{
+			"name": "Md. Golam Rakib",
+			"workstation": "Kashimpur Central Jail 1",
+			"gender": "Male"
+		},
+		{
+			"name": "Md. Mahidul Islam",
+			"workstation": "Kashimpur Central Jail 2",
+			"gender": "Male"
+		},
+		{
+			"name": "Baby Naznin",
+			"workstation": "Kashimpur Central Jail 3",
+			"gender": "Female"
+		},
+		{
+			"name": "Md. Sultan Mahmud",
+			"workstation": "Kashimpur Central Jail 4",
+			"gender": "Female"
+		},
+		{
+			"name": "Mehdi Hasan",
+			"workstation": "Gazipur District Jail",
+			"gender": "Male"
+		}
+	]
+}
