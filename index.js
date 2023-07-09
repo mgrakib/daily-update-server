@@ -30,29 +30,8 @@ async function run() {
 			.collection("workStation");
 		const userCollection = client.db("pidsDailyUpdate").collection("users");
 
-		app.get(`/single-user`, async (req, res) => {
-			const email = req.query.email;
-			const query = { email };
-			const singleUser = await userCollection.findOne(query);
-			res.send(singleUser);
-		});
-
-		// all user for update field
-		app.get("/workstation", async (req, res) => {
-			const email = req.query.email;
-			const userFindQuery = { email };
-			const userResutl = await userCollection.findOne(userFindQuery);
-
-			const stationKey = userResutl?.stationKey;
-			const wordStationQuery = { stationKey };
-			const workStationResult = await workStationCollection.findOne(
-				wordStationQuery
-			);
-
-			res.send(workStationResult);
-		});
-
-		// add new user to db
+		// funcation
+		// add new user to db funcation
 		const addUserToDB = async (req, res, next) => {
 			const body = req.body;
 			const email = body?.emali;
@@ -80,8 +59,8 @@ async function run() {
 			next();
 		};
 
-		// add user and add to workstaion
-		app.post("/add-user", addUserToDB, async (req, res) => {
+		// add new work station
+		const addNewStation = async (req, res, next) => {
 			const body = req.body;
 			const name = body?.name;
 			const email = body?.emali;
@@ -89,8 +68,9 @@ async function run() {
 			const workStationName = body?.workStationName;
 			const stationKey = body?.stationKey;
 
-			// add to workstaion
+			
 
+			// add to workstaion
 			const workStationQuery = { stationKey };
 			const workStaionResult = await workStationCollection.findOne(
 				workStationQuery
@@ -137,6 +117,109 @@ async function run() {
 					);
 			}
 
+			next();
+		};
+
+		const transferWorkStation = async (req, res, next) => {
+			const body = req.body;
+			const email = body.email;
+			const servicId = body.operatorId;
+			const workStationName = body.newStaionName;
+			const stationKey = body.newStaionKey;
+			const currentStationKey = body.currentStationKey;
+			const userData = await workStationCollection
+				.aggregate([
+					{ $match: { "operator.email": email } },
+					{
+						$project: {
+							operator: {
+								$filter: {
+									input: "$operator",
+									as: "op",
+									cond: { $eq: ["$$op.email", email] },
+								},
+							},
+						},
+					},
+				])
+				.toArray();
+
+			const isExistWorkStation = await workStationCollection.findOne({
+				stationKey,
+			});
+			if (!isExistWorkStation) {
+				const newWorkStation = {
+					workStationName,
+					stationKey,
+					active: [],
+					lockup: [],
+					jailWarder: {
+						entry: [],
+						release: [],
+					},
+					operator: [userData[0]?.operator[0]],
+				};
+
+				const insertNewWorkStation =
+					await workStationCollection.insertOne(newWorkStation);
+			} else {
+
+				isExistWorkStation.operator.push(userData[0]?.operator[0]);
+			
+				const updateWorkStationOperator =
+					await workStationCollection.updateOne(
+						{
+							stationKey,
+						},
+						{ $set: { operator: isExistWorkStation.operator } }
+					);
+
+				const fing = await workStationCollection.findOne({
+					stationKey,
+				});
+				
+				
+			}
+
+			// remove operator form old station
+				const removeUser = await workStationCollection.updateOne(
+					{ "operator.email": email, stationKey: currentStationKey },
+					{
+						$pull: {
+							operator: { email },
+						},
+					}
+				);
+			next();
+		};
+
+		// API ###############
+
+		app.get(`/single-user`, async (req, res) => {
+			const email = req.query.email;
+			const query = { email };
+
+			const singleUser = await userCollection.findOne(query);
+			res.send(singleUser);
+		});
+
+		// all user for update field
+		app.get("/workstation", async (req, res) => {
+			const email = req.query.email;
+			const userFindQuery = { email };
+			const userResutl = await userCollection.findOne(userFindQuery);
+
+			const stationKey = userResutl?.stationKey;
+			const wordStationQuery = { stationKey };
+			const workStationResult = await workStationCollection.findOne(
+				wordStationQuery
+			);
+
+			res.send(workStationResult);
+		});
+
+		// add user and add to workstaion use funcatjion *****************
+		app.post("/add-user", addUserToDB, addNewStation, async (req, res) => {
 			res.send({});
 		});
 
@@ -250,35 +333,24 @@ async function run() {
 			res.send(userData);
 		});
 
-		// transfer operator
-		app.put('/transfer-operator', async (req, res) => {
+		// transfer operator user use funcation ********
+		app.put("/transfer-operator", transferWorkStation, async (req, res) => {
 			const body = req.body;
-			const stationKey = body.newStaionKey;
-			const workStationName = body.newStaionName;
 			const email = body.email;
 			const servicId = body.operatorId;
+			const workStationName = body.newStaionName;
+			const stationKey = body.newStaionKey;
 
-			const isStationExist = await userCollection.findOne({ stationKey });
-			
-			if (!isStationExist) {
-				const userInfo = {
-					
-					email,
-					servicId,
+			const query = { servicId };
+			const isStationExist = await userCollection.updateOne(query, {
+				$set: {
 					workStationName,
 					stationKey,
-				};
-				// add to new user
-				const insertUser = await userCollection.insertOne(userInfo);
-
-				console.log(insertUser)
-			}
-
-
-
-
-			res.send({})
-		})
+				},
+			});
+console.log(body , isStationExist);
+			res.send({});
+		});
 
 		// Send a ping to confirm a successful connection
 		await client.db("admin").command({ ping: 1 });
