@@ -68,8 +68,6 @@ async function run() {
 			const workStationName = body?.workStationName;
 			const stationKey = body?.stationKey;
 
-			
-
 			// add to workstaion
 			const workStationQuery = { stationKey };
 			const workStaionResult = await workStationCollection.findOne(
@@ -163,9 +161,8 @@ async function run() {
 				const insertNewWorkStation =
 					await workStationCollection.insertOne(newWorkStation);
 			} else {
-
 				isExistWorkStation.operator.push(userData[0]?.operator[0]);
-			
+
 				const updateWorkStationOperator =
 					await workStationCollection.updateOne(
 						{
@@ -177,22 +174,139 @@ async function run() {
 				const fing = await workStationCollection.findOne({
 					stationKey,
 				});
-				
-				
 			}
 
 			// remove operator form old station
-				const removeUser = await workStationCollection.updateOne(
-					{ "operator.email": email, stationKey: currentStationKey },
-					{
-						$pull: {
-							operator: { email },
-						},
-					}
-				);
+			const removeUser = await workStationCollection.updateOne(
+				{ "operator.email": email, stationKey: currentStationKey },
+				{
+					$pull: {
+						operator: { email },
+					},
+				}
+			);
 			next();
 		};
 
+		// get all entry operator
+		const getTotalEntryOperator = async date => {
+			const operatorTotalEntry = await workStationCollection
+				.aggregate([
+					{
+						$unwind: "$operator",
+					},
+					{
+						$unwind: "$operator.entry",
+					},
+					{
+						$match: {
+							"operator.entry.reportDate": date,
+						},
+					},
+					{
+						$group: {
+							_id: {
+								date: "$operator.entry.reportDate",
+							},
+							operatorTotalEntry: {
+								$sum: "$operator.entry.entry",
+							},
+						},
+					},
+				])
+				.toArray();
+
+			return operatorTotalEntry;
+		};
+
+		const getTotalEntryJail = async date => {
+			const jailWarderTotalEntry = await workStationCollection
+				.aggregate([
+					{
+						$unwind: "$jailWarder",
+					},
+					{
+						$unwind: "$jailWarder.entry",
+					},
+					{
+						$match: {
+							"jailWarder.entry.reportDate": date,
+						},
+					},
+					{
+						$group: {
+							_id: {
+								date: "$jailWarder.entry.reportDate",
+							},
+							jailWarderTotalEntry: {
+								$sum: "$jailWarder.entry.number",
+							},
+						},
+					},
+				])
+				.toArray();
+			return jailWarderTotalEntry;
+		};
+
+		const getTotalReleaseOperator = async date => {
+			const operatorTotalRelease = await workStationCollection
+				.aggregate([
+					{
+						$unwind: "$operator",
+					},
+					{
+						$unwind: "$operator.release",
+					},
+					{
+						$match: {
+							"operator.release.reportDate": date,
+						},
+					},
+					{
+						$group: {
+							_id: {
+								date: "$operator.release.reportDate",
+							},
+							operatorTotalRelease: {
+								$sum: "$operator.release.release",
+							},
+						},
+					},
+				])
+				.toArray();
+
+			return operatorTotalRelease;
+		};
+
+		const getTotalReleaseJail = async date => {
+			const jailWarderTotalRelease = await workStationCollection
+				.aggregate([
+					{
+						$unwind: "$jailWarder",
+					},
+					{
+						$unwind: "$jailWarder.release",
+					},
+					{
+						$match: {
+							"jailWarder.release.reportDate": date,
+						},
+					},
+					{
+						$group: {
+							_id: {
+								date: "jailWarder.release.reportDate",
+							},
+							jailWarderTotalRelease: {
+								$sum: "$jailWarder.release.number",
+							},
+						},
+					},
+				])
+				.toArray();
+
+			return jailWarderTotalRelease;
+		};
 		// API ###############
 
 		app.get(`/single-user`, async (req, res) => {
@@ -201,6 +315,25 @@ async function run() {
 
 			const singleUser = await userCollection.findOne(query);
 			res.send(singleUser);
+		});
+
+		app.get("/get-all-users", async (req, res) => {
+			const skip = req.query?.skip;
+			const limit = req.query?.limit;
+
+			const query = { role: { $ne: "admin" } };
+			const allUser = await userCollection
+				.find(query)
+				.skip(parseInt(skip))
+				.limit(parseInt(limit))
+				.toArray();
+			res.send(allUser);
+		});
+
+		app.get("/get-total-user-number", async (req, res) => {
+			const query = { role: { $ne: "admin" } };
+			const totalUser = await userCollection.countDocuments(query);
+			res.send({ totalUser });
 		});
 
 		// all user for update field
@@ -234,6 +367,8 @@ async function run() {
 				jailWarderRelease,
 				lockup,
 				stationName,
+
+				reportDate,
 			} = body;
 
 			const bulkOps = newData.map(({ email, entry, release }) => ({
@@ -245,11 +380,11 @@ async function run() {
 					update: {
 						$push: {
 							"operator.$.entry": {
-								$each: [entry],
+								$each: [{ entry, reportDate }],
 								$position: 0,
 							},
 							"operator.$.release": {
-								$each: [release],
+								$each: [{ release, reportDate }],
 								$position: 0,
 							},
 						},
@@ -266,19 +401,29 @@ async function run() {
 				{
 					$push: {
 						[`jailWarder.entry`]: {
-							$each: [parseInt(jailWarderEntry)],
+							$each: [
+								{
+									number: parseInt(jailWarderEntry),
+									reportDate,
+								},
+							],
 							$position: 0,
 						},
 						[`jailWarder.release`]: {
-							$each: [parseInt(jailWarderRelease)],
+							$each: [
+								{
+									number: parseInt(jailWarderRelease),
+									reportDate,
+								},
+							],
 							$position: 0,
 						},
 						[`lockup`]: {
-							$each: [parseInt(lockup)],
+							$each: [{ number: parseInt(lockup), reportDate }],
 							$position: 0,
 						},
 						[`active`]: {
-							$each: [parseInt(active)],
+							$each: [{ number: parseInt(active), reportDate }],
 							$position: 0,
 						},
 					},
@@ -348,8 +493,38 @@ async function run() {
 					stationKey,
 				},
 			});
-console.log(body , isStationExist);
+
 			res.send({});
+		});
+
+		app.get("/daily-report", async (req, res) => {
+			const date = req.query.date;
+
+
+
+			const totalEntryOperator = await getTotalEntryOperator(
+				date
+			);
+			const totalEntryJailWarder = await getTotalEntryJail(date);
+			const totalReleaseOperator = await getTotalReleaseOperator(date);
+			const totalReleaseJailWarder = await getTotalReleaseJail(date);
+
+			const totalEntry =
+				totalEntryOperator?.[0]?.operatorTotalEntry +
+				totalEntryJailWarder?.[0]?.jailWarderTotalEntry;
+			const totalRelease =
+				totalReleaseOperator?.[0]?.operatorTotalRelease +
+				totalReleaseJailWarder?.[0]?.jailWarderTotalRelease;
+
+			res.send({ totalEntry, totalRelease });
+		});
+
+		app.get("/all-report-date", async (req, res) => {
+			const query = { role: { $ne: "admin" } };
+			const result = await workStationCollection.find(query).toArray()
+
+			console.log(result)
+			res.send(result);
 		});
 
 		// Send a ping to confirm a successful connection
